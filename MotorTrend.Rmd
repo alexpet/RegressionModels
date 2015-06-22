@@ -1,0 +1,168 @@
+---
+title: "Motor Trend Regression Report"
+author: "Alex Petkovski"
+date: "Sunday, June 21, 2015"
+output: 
+    pdf_document:
+        number_sections: yes
+        toc: false
+---
+
+#Executive Summary
+The following report analyses whether automatic or manual transmission improve MPG
+based on data extracted from 1974 Motor Trend US magazine and quantifies this 
+difference. We found that manual performed better than automatic, when holding horse 
+power and car weight fixed.   
+
+#Data Exploration
+```{r, PackagesUsed, echo=FALSE, message=FALSE, comment=FALSE}
+library(datasets)
+library(ggplot2)
+library(GGally)
+library(car)
+```
+After loading required packages (see Appendix), we construct a pairs plot in order 
+to identify correlations by parameters shown in **mtcars**. Treating **Transmission(am)** 
+as a factor variable shows boxplots and histograms for each possible parameter, 
+which from initial inspection reveals that manual transmission generally has a 
+higher mpg than automatic transmission when not factoring any other variables. The 
+panel plot is shown in the Appendix. Next, we need to set factor variables for all 
+factor variables (See Appendix).
+
+```{r, ggPairs, echo=FALSE, comment=FALSE, cache=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.keep='none'}
+mtcars$am <- as.factor(mtcars$am)
+g = ggpairs(mtcars,
+            colour = "am",
+            lower = list(continuous = "smooth"),
+            upper = list(params=list(size = 2, fatten=0.3)),
+            params = c(method = "loess"), 
+            axisLabels = "internal",
+            title = "Exploratory Pairs Panel Plot by Transmission")
+g
+```
+```{r, ProcessFactors, echo=FALSE, message=FALSE}
+mtcars$am <- as.factor(mtcars$am)
+mtcars$cyl <- as.factor(mtcars$cyl)
+mtcars$vs <- as.factor(mtcars$vs)
+mtcars$gear <- as.factor(mtcars$gear)
+mtcars$carb <- as.factor(mtcars$carb)
+```
+#Model Selection
+As a consequence of the Panel Plot, we probably won't need qsec and gear due to 
+low correlation with mpg. Also, from the model, we see highly correlated parameters 
+likely potential to cause Variance Inflation.   
+
+##All parameter model
+To show this we fit a model with all parameters which showed high p-values and high
+variance inflation factors, thus our model requires a selection process. (See 
+appendix for code and results)
+```{r, VarianceInflation, echo=FALSE, message=FALSE, results='hide', cache=TRUE, warning=FALSE, fig.keep='none'}
+par(mfrow = c(2, 2))
+fit.all <- lm(mpg ~ ., mtcars)
+summary(fit.all)$coef
+```
+Results in appendix show non-significant **p-values** for each beta.
+
+#Diagnostics
+With each iteration we run diagnostics to determine if model has good R^2^ and low
+**VIF**.   
+
+##Initial Model using Transmission Type Only
+```{r, InitialFit, echo=FALSE, message=FALSE}
+par(mfrow = c(2, 2))
+fit <- lm(mpg ~ am, mtcars)
+fit1 <- fit
+summary(fit1)$coef
+intercept <- summary(fit1)$coef[1]
+am1 <- summary(fit1)$coef[2]
+est_am1 <- intercept + am1
+r.squared <- summary(fit1)$r.squared
+```
+From this model:   
+1. Estimate for mpg is `r round(intercept,2)` when transmission is automatic(am 
+= 0) and `r round(est_am1,2)` when transmission is manual(am = 1)   
+2. We also see that t values are sigmificant, both at less than 0.001   
+3. Without taking any other parameters other that transmission type, we see manual 
+has better mpg than automatic, but we R-squared is at `r round(r.squared,2)`, so 
+our model is biased and requires additional explanatory variables to make any reasoable 
+conclusion   
+
+## Add Horse Power (hp) to model
+```{r, SecondFit, echo=FALSE, message=FALSE, cache=TRUE}
+par(mfrow = c(2, 2))
+fit2 <- update(fit, mpg ~ am + hp)
+coef2 <- summary(fit2)$coef
+r.squared.2 <- summary(fit2)$r.squared
+```
+1. Coefficients have good p-values 
+2. This model with Horse Power added improves R^2^ to `r round(r.squared.2,2)` 
+3. VIFs are low 
+```{r, SecondFitVif, echo=FALSE, message=FALSE, cache=TRUE}
+vif(fit2)
+```
+## Add weight (wt) to model along with interaction on transmission
+```{r, ThirdFit, echo=FALSE, message=FALSE, cache=TRUE}
+fit3 <- update(fit, mpg ~ am + hp + wt + wt:am)
+summary(fit3)$coef
+r.squared.3 <- summary(fit3)$r.squared
+```
+1. Coefficients continue to have good p-values
+2. This model with Weight and interaction added improves R^2^ to `r round(r.squared.3,2)` 
+3. VIFs are worse but still low
+```{r, ThirdFitVif, echo=FALSE, message=FALSE, cache=TRUE}
+vif(fit3)
+```
+4. Let's plot the residuals as this is our best model (See appendix for plot)
+```{r, ThirdFitPlot, echo=FALSE, message=FALSE, cache=TRUE, fig.keep='none'}
+par(mfrow = c(2, 2))
+plot(fit3)
+```
+5. Residual plots don't show any obvious bias (See appendix for plot)   
+
+#Conclusion
+```{r, Conclusion, echo=FALSE, message=FALSE, cache=TRUE}
+anova(fit1, fit2, fit3)
+```
+From ANOVA, we see that inclusion of all am, hp, and am:wt gives a model with high
+significance and low p-value. Best model from the three tested is fit3 and is significant
+in the alpha = 0.01 range. Finally, keeping hp and wt constant, manual transmission 
+has higher mpg by `r round(sum(summary(fit3)$coef[1:5])-summary(fit3)$coef[1]-sum(summary(fit3)$coef[3:4]),2)`. The table of standard errors are shown in 3.1 coefficients table.
+
+\newpage 
+
+#APPENDIX 
+## R Code used in the Study: 
+The following code was used to create and represent the data used in this analysis
+```{r, PackagesUsed, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following code was used to create the panel plot described in Data Exploration 
+section and the panel plot is shown
+```{r, ggPairs, echo=TRUE, message = FALSE, warning= FALSE, cache=TRUE}
+```
+The following code was used to set factor variables
+```{r, ProcessFactors, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following shows code and coefs for the all parameter model
+```{r, VarianceInflation, echo=TRUE, message=FALSE}
+```
+The following shows code used to create the initial fit with mpg ~ am
+```{r, InitialFit, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following shows code used to create the second fit adding hp
+```{r, SecondFit, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following shows code used to create the second fit VIFs
+```{r, SecondFitVif, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following shows code used to create the third fit adding wt and am:wt
+```{r, ThirdFit, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following shows code used to create the third fit VIFs
+```{r, ThirdFitVif, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
+The following shows code used to create the third fit residual plots
+```{r, ThirdFitPlot, echo=TRUE, message = FALSE, comment = FALSE, cache=TRUE}
+```
+The following shows code used to create the ANOVA conclusion results
+```{r, Conclusion, echo=TRUE, message = FALSE, comment = FALSE, eval=FALSE}
+```
